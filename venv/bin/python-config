@@ -1,4 +1,4 @@
-#!/home/cowberry/Documents/hwbot_v2/venv/bin/python
+#!/home/tolik/Documents/hwbot_v2/venv/bin/python
 
 import sys
 import getopt

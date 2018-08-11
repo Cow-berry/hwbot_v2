@@ -1,18 +1,17 @@
 import sys                # возможность импортирования файлов из разных директорий
-sys.path.append('/home/cowberry/Documents/hwbot_v2') # для доступа к расписанию
-import data.timetable          # расписание
+sys.path.append('/home/tolik/Documents/hwbot_v2') # для доступа к расписанию
+import data.timetable as table       # расписание
 import time               # время и дата
 import config             # токен и id-шники админов
 import telebot            # удобная работа с Telegram API
 from pathlib import Path  # для проверки существования файла
 from telebot import types # для крутых клавиатур
-import os                 # исполнение консольных команд
-from importlib import reload  # позволяет переимпортировать модуль, если он был изменён в процессе (timetable.py)
+import os                 # исполнение консольных командcommand = [] # commadn to execute/paste. Переменная создана, т.к. между функциями не сделать передачи.
 
-
+##timetable -- расписание. Добавить возможность временных изменений.
+##change_timetable -- изменить расписание
 # tommorow -- дз на завтра
 # actual -- заданное дз по всем предметам
-# timetable -- расписание. Добавить возможность временных изменений.
 # duty table -- список дежурных
 # subject homework -- дз по предмету
 # day homework -- дз на определённый день в прошлом (архив) или будущем (собирается из того, что есть на данный момент)
@@ -99,39 +98,35 @@ def admin_reply(message):
 
 def change_timetable(message):
     sent = send(message, 'Введите изменения:', return_fun = True)
-    bot.register_next_step_handler(sent, changing_timetable_which)
+    bot.register_next_step_handler(sent, changing_timetable_confirm)
 
-def changing_timetable_which(message):
-    text = message.text.split()
-    dow = text[0]
-    n = int(text[1])-1
-    new = text[2]
-    mess = "%s[%i] = '%s\n'"%(dow, n, new)
-    sent = send(message, mess, return_fun = True)
-    bot.register_next_step_handler(sent, changing_timetable_confirm(mess))
-    start(message)
-
-def changing_timetable_confirm(message, mess):
+def changing_timetable_confirm(message):
+    global command
     markup = types.ReplyKeyboardMarkup()
     markup.row('Yes', 'No')
-    sent = bot.send_message(message.chat.id, 'Вы уверены, что хотите внести изменения?')
-    bot.register_next_step_handler(sent, changing_timetable_final(mess))
+    text = message.text.split()
+    day_of_week = int(text[0])
+    n = int(text[1])-1
+    new = text[2]
+    command = [day_of_week, n, new]
+    sent = bot.send_message(message.chat.id, 'Вы уверены, что хотите внести изменения?', reply_markup = markup)
+    bot.register_next_step_handler(sent, changing_timetable_final)
 
-def changing_timetable_final(message, mess):
+def changing_timetable_final(message):
+    global command
     text = message.text
+    send(message, text)
     if text == 'Yes':
-        file = open('data/timetable.py', 'a')
-        file.write(mess)
-        file.close()
+        table.change(*command)
+        send(message, 'записано')
     start(message)
 
 
 
 
 def timetable(message):
-    reload(data.timetable)
     text = ''
-    days_of_week = [data.timetable.monday, data.timetable.tuesday, data.timetable.wednesday, data.timetable.thursday, data.timetable.friday, data.timetable.saturday]
+    days_of_week = table.get_all()
     days_of_week_rus = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота']
     isoweek = time.localtime(time.time())[6]
     for i in range(6):
