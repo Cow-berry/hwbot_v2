@@ -37,9 +37,9 @@ def date_range(base, end):
 
 def make_pairs(l):
     if len(l) % 2 == 0:
-        return [[subjects[2*i], subjects[2*i+1]] for i in range(0, len(subjects)//2)]
+        return [[l[2*i], l[2*i+1]] for i in range(0, len(l)//2)]
     else:
-        return [[subjects[2*i], subjects[2*i+1]] for i in range(0, len(subjects)//2)] + [[l[-1]]]
+        return [[l[2*i], l[2*i+1]] for i in range(0, len(l)//2)] + [[l[-1]]]
 
 
 ##timetable -- расписание. Добавить возможность временных изменений.
@@ -54,9 +54,10 @@ def make_pairs(l):
 ##info -- важная информация, которая и так будет отсылаться, просто её можно дополнительно себе прислать
 ##wish -- пожелания к автору бота
 ##add_hw -- ищет ближайший день с выбранным предметом и добавляет файл с дз-хой
-# rm_hw -- на случай ошибки
-# kospekt -- конспекты по предметам
-# teachers -- таблица (предмет -- учитель (ФИО)). Можно запили добавление/удаление в/из таблицы
+##rm_hw -- на случай ошибки
+##kospekt -- конспекты по предметам
+##(admin) push konspekt
+##teachers -- таблица (предмет -- учитель (ФИО)). Можно запили добавление/удаление в/из таблицы
 
 # в будущем можно научиться посылать фотки (hw), что довольно важно.
 # vocation mode когда есть одно статическое домашнее задание на протяжении нескольких дней/недель
@@ -115,7 +116,7 @@ subjects = ['Алгебра', 'Англ.яз.', 'Биология', 'Геогр�
 
 chosen_subjects = {}
 
-def get_hw(day, sub = None):
+def get_hw(message, day, sub = False, mul = False):
         name = day + '.txt'
         hw = {}
         if not sub:
@@ -131,13 +132,31 @@ def get_hw(day, sub = None):
                 hw[subject] = ''.join(f.readlines())
                 f.close()
         if hw == {}:
-            return 'Домашнее задание на %s отсутсвует'%(day)
+            if mul:
+                return
+            send(message,'Домашнее задание на %s отсутсвует'%(day))
+            return
         res = day + ':\n'
-        for i in hw:
-            sub = i
-            homework = hw[i]
+        files = []
+        for subject in hw:
+            for string in hw[subject]:
+                if string.startswith('file '):
+                    files.append(string[6:])
+                    hw[subject].remove(string)
+        for sub in hw:
+            homework = hw[sub]
             res+='<b>%s</b>:\n%s'%(sub, homework)
-        return res
+        # if (res == day + ':\n') and mul:
+        #     return
+        send(message, res)
+        for file_path in files:
+            try:
+                file = open(path_to_hwbot_v2 + file_path, 'r')
+            except FileNotFoundError:
+                continue
+            else:
+                bot.send_document(message.chat.id, file)
+                file.close()
 
 
 
@@ -161,7 +180,7 @@ def start(message):
     markup.row('timetable', 'duty', '/start')
     markup.row('tomorrow', 'hw on day', 'actual')
     markup.row('subject', 'info', 'wish')
-    # markup.row('konspekt')
+    markup.row('konspekt', 'teachers', '.')
     if admin(message):
         markup.row('admin menu')
     sent = bot.send_message(message.chat.id, 'главное меню:', reply_markup=markup)
@@ -172,7 +191,10 @@ def first(message):
     del(started[message.chat.id])
     text = message.text
     adm = admin(message)
-    if text == 'timetable':
+    if not(adm) and text == 'admin menu':
+        send(message, 'Хорошая попытка, но нет.')
+        start(message)
+    elif text == 'timetable':
         timetable(message)
     elif adm and text == 'admin menu':
         admin_menu(message)
@@ -181,7 +203,7 @@ def first(message):
         if datetime.date.isoweekday(datetime.date.today()) == 6 :
             tomorrow = tomorrow + datetime.timedelta(days=1)
         tomorrow = tomorrow.strftime("%d.%m.%Y")
-        send(message, get_hw(tomorrow))
+        get_hw(message, tomorrow)
         start(message)
     elif text == 'hw on day':
         hw_on_day(message)
@@ -189,14 +211,14 @@ def first(message):
         dates = [(datetime.date.today() + datetime.timedelta(days=i)).strftime("%d.%m.%Y") for i in range(1, 8)]
         actual = ''
         for d in dates:
-            hw = get_hw(d)
-            if hw == 'Домашнее задание на %s отсутсвует'%(d):
-                continue
-            actual += hw
-        if not(actual):
-            send(message, 'Не найдено ни одного домашнего задания на ближайшую неделю')
-        else:
-            send(message, actual)
+            get_hw(message, d)
+        #     if hw == 'Домашнее задание на %s отсутсвует'%(d):
+        #         continue
+        #     actual += hw
+        # if not(actual):
+        #     send(message, 'Не найдено ни одного домашнего задания на ближайшую неделю')
+        # else:
+        #     send(message, actual)
         start(message)
     elif text == 'subject':
         subject_choose(message, subject_menu)
@@ -217,14 +239,31 @@ def first(message):
     elif text == 'wish':
         sent = send(message, 'Введите текст и он будет отправлен создателю данного бота.', return_fun = True)
         bot.register_next_step_handler(sent, wish)
-    # elif text == 'konspekt':
-    #     for i in [ru_to_en(sub) for sub in subjects]:
-    #         pass
-    #         try:
-    #             konspektf = open(path_to_hwbot_v2 + '/data/%s/kospekt.pdf'%s)
+    elif text == 'konspekt':
+        subject_choose(message, send_konspekt)
+    elif text == 'teachers':
+        teachersf = open(path_to_hwbot_v2 + '/data/teachers.txt', 'r')
+        teachers = teachersf.readlines()
+        teachersf.close()
+        send(message, ''.join(teachers))
+        start(message)
     else:
         start(message)
+@trye
+def send_konspekt(message):
+    subject = ru_to_en(message.text)
+    try:
+        konspekt = open(path_to_hwbot_v2 + '/data/konspektus/%s.pdf'%(subject), 'rb')
+    except FileNotFoundError:
+        send(message, 'Не найдено конспекта по предмету "%s"'%(message.text))
+    else:
+        bot.send_document(message.chat.id, konspekt)
+        konspekt.close()
+    finally:
+        start(message)
 
+
+@trye
 def wish(message):
     wish_bot.send_message(config.admin_id_list[0], message.text)
     send(message, 'Пожелание отправлено.')
@@ -272,8 +311,10 @@ def give_subject_hw(message):
                 start(message)
                 return 0
     dates = date_range(quarters_dates[text]['begin'], quarters_dates[text]['end'])
-    hw = [d + ':\n' + get_hw(d, sub = ru_to_en(chosen_subjects[message.chat.id])) for d in dates if not(get_hw(d, sub = ru_to_en(chosen_subjects[message.chat.id])) == 'Домашнее задание на %s отсутсвует'%(d))]
-    send(message, '\n'.join(hw))
+    for d in dates:
+        get_hw(message, d, sub = ru_to_en(chosen_subjects[message.chat.id]))
+        # if not(get_hw(d, sub = ru_to_en(chosen_subjects[message.chat.id])) == 'Домашнее задание на %s отсутсвует'%(d))]
+    # send(message, '\n'.join(hw))
     start(message)
 
 @trye
@@ -321,8 +362,8 @@ def get_day(call):
                 begin, end = end, begin
             subject = chosen_subjects[chat_id]
             dates = date_range(str_date(begin), str_date(end))
-            hw = [dates_elem + ':\n' + get_hw(dates_elem, sub = ru_to_en(chosen_subjects[chat_id])) for dates_elem in dates if not(get_hw(dates_elem, sub = ru_to_en(chosen_subjects[chat_id])) == 'Домашнее задание на %s отсутсвует'%(dates_elem))]
-            send(call.message, '\n'.join(hw))
+            for dates_elem in dates:
+                get_hw(call.message, dates_elem, sub = ru_to_en(chosen_subjects[chat_id]))
             del(chosen_dates[chat_id])
         bot.answer_callback_query(call.id, text="")
 
@@ -341,7 +382,7 @@ def get_day(call):
         day=call.data[13:]
         date = str(datetime.datetime(int(saved_date[0]),int(saved_date[1]),int(day),0,0,0))
         date = '%s.%s.%s'%(date[8:10], date[5:7], date[:4])
-        bot.send_message(chat_id, get_hw(date), parse_mode = 'HTML')
+        get_hw(call.message, date)
         bot.answer_callback_query(call.id, text="")
 
     else:
@@ -406,9 +447,9 @@ def ignore(call):
 @trye
 def admin_menu(message):
     markup = types.ReplyKeyboardMarkup()
-    markup.row('test', 'kill', 'change_info')
-    markup.row('change_timetable', 'mode', 'add_hw')
-    markup.row('/start', '.', 'rm_hw')
+    markup.row('test', 'kill', '/start')
+    markup.row('change_timetable', 'mode', 'change_info')
+    markup.row('add_hw', 'rm_hw', 'push_konspekt')
     sent = bot.send_message(message.chat.id, "admin menu test", reply_markup=markup)
     bot.register_next_step_handler(sent, admin_reply)
 
@@ -433,8 +474,54 @@ def admin_reply(message):
         bot.register_next_step_handler(sent, change_info)
     elif text == 'add_hw':
         subject_choose(message, add_hw_step)
+    elif text == 'rm_hw':
+        sent = send(message, 'Введите дату в формате dd.mm.yyyy:', return_fun = True)
+        bot.register_next_step_handler(sent, rm_hw_sub_choose)
+    elif text == 'push_konspekt':
+        subject_choose(message, push_konspekt_subject_choose)
     else:
         start(message)
+
+@trye
+def push_konspekt_subject_choose(message):
+    chosen_subjects[message.chat.id] = ru_to_en(message.text)
+    sent = send(message, 'Отошлите файл pdf с конспектом по предмету "%s"'%(message.text), return_fun = True)
+    bot.register_next_step_handler(sent, push_konspekt)
+
+@trye
+def push_konspekt(message):
+    subject = chosen_subjects[message.chat.id]
+    file_id = message.document.file_id
+    downloaded_file = bot.download_file(bot.get_file(file_id).file_path)
+    konspekt = open(path_to_hwbot_v2 + '/data/konspektus/%s.pdf'%(subject), 'wb')
+    konspekt.write(downloaded_file)
+    konspekt.close()
+    start(message)
+
+
+
+@trye
+def rm_hw_sub_choose(message):
+    chosen_dates[message.chat.id] = message.text
+    weekday = get_date(message.text).weekday()
+    list_of_subs = table.get(weekday)
+    print(list_of_subs)
+    markup = types.ReplyKeyboardMarkup()
+    for i in make_pairs(list_of_subs):
+        markup.row(*i)
+    sent = bot.send_message(message.chat.id, 'Выберите предмет:', reply_markup = markup)
+    bot.register_next_step_handler(sent, rm_hw)
+
+@trye
+def rm_hw(message):
+    path = path_to_hwbot_v2 + '/data/hw/%s/%s.txt'%(ru_to_en(message.text), chosen_dates[message.chat.id])
+    try:
+        os.remove(path)
+    except FileNotFoundError:
+        send(message, 'Не найдено файла ' + path)
+        start(message)
+    else:
+        send(message, 'Файл ' + path + ' удалён.')
 
 # @trye
 # def add_hw(message):
@@ -449,7 +536,7 @@ def add_hw_step(message):
 # @trye
 def add_hw_step2(message):
     found = False
-    for day in range(7):
+    for day in range(1, 8):
         if ((datetime.datetime.today() + datetime.timedelta(days = day)).weekday() != 6) and (chosen_subjects.get(message.chat.id) in table.get_all()[(datetime.datetime.today() + datetime.timedelta(days = day)).weekday()]):
             found = True
             break

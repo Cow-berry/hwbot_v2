@@ -39,6 +39,3 @@ def create_calendar(year,month, subject = None):
     row.append(types.InlineKeyboardButton(">",callback_data=adding + "next-month"))
     markup.row(*row)
     return markup
-
-markup = create_calendar(2018, 8)
-print(markup.keyboard)

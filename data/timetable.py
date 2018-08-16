@@ -1,8 +1,9 @@
 # когда-нибудь можно добавить поддержку английского. Просто для фана.
+# Хотя у меня и так почти всё на английском
 
 def get(day_of_week):
     table = open('/home/tolik/Documents/hwbot_v2/data/timetable.txt', 'r')
-    ret = table.readlines()[day_of_week][:-1].split(';')
+    ret = table.readlines()[day_of_week].split(';')
     table.close()
     return ret
 
