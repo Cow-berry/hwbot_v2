@@ -14,6 +14,8 @@ from ru_or_en import ru_to_en, en_to_ru
 
 quarters_dates = {1: {'begin': '01.09.2018', 'end': '27.10.2018'}, 2: {'begin': '8.11.2018', 'end': '27.12.2018'}, 3: {'begin': '11.01.2019', 'end': '23.03.2019'}, 4: {'begin': '02.04.2019', 'end': '25.05.2018'}}
 
+
+
 def get_date(d):
     year = d[6:]
     if d[3] == '0':
@@ -46,11 +48,13 @@ def make_pairs(l):
 ##day homework -- дз на определённый день в прошлом (архив) или будущем (собирается из того, что есть на данный момент)
 ##actual -- заданное дз по всем предметам
 ##duty table -- список дежурных
-# subject homework -- меню с:
-    # I, II, III, IV quarter
-    # from date to date (calender)
-# info -- важная информация, которая и так будет отсылаться, просто её можно дополнительно себе прислать
-# wish -- пожелания к автору бота
+##subject homework -- меню с:
+    ##I, II, III, IV quarter
+    ##from date to date (calender)
+##info -- важная информация, которая и так будет отсылаться, просто её можно дополнительно себе прислать
+##wish -- пожелания к автору бота
+##add_hw -- ищет ближайший день с выбранным предметом и добавляет файл с дз-хой
+# rm_hw -- на случай ошибки
 # kospekt -- конспекты по предметам
 # teachers -- таблица (предмет -- учитель (ФИО)). Можно запили добавление/удаление в/из таблицы
 
@@ -58,6 +62,8 @@ def make_pairs(l):
 # vocation mode когда есть одно статическое домашнее задание на протяжении нескольких дней/недель
 
 bot = telebot.TeleBot(config.token)
+
+wish_bot = telebot.TeleBot(config.wish_token)
 
 # bot.send_message(config.admin_id_list[0], 'test')
 
@@ -75,7 +81,7 @@ def admin(message):
 
 def send(message, text, return_fun = False):
     if text == '':
-        text = 'Nothing was found'
+        text = 'Ничего не было найдено.'
     s = bot.send_message(message.chat.id, text , parse_mode = 'HTML')
     if not(return_fun):
         s
@@ -118,7 +124,7 @@ def get_hw(day, sub = None):
             list_of_subjects = [sub]
         for subject in list_of_subjects:
             try:
-                f = open(path_to_hwbot_v2 + '/data/hw/%s/%s'%(subject, name), 'r')
+                f = open(path_to_hwbot_v2 + '/data/hw/%s/%s'%(ru_to_en(subject), name), 'r')
             except FileNotFoundError:
                 pass
             else:
@@ -126,7 +132,7 @@ def get_hw(day, sub = None):
                 f.close()
         if hw == {}:
             return 'Домашнее задание на %s отсутсвует'%(day)
-        res = ''
+        res = day + ':\n'
         for i in hw:
             sub = i
             homework = hw[i]
@@ -135,25 +141,35 @@ def get_hw(day, sub = None):
 
 
 
+def subject_choose(message, func):
+    markup = types.ReplyKeyboardMarkup()
+    for i in make_pairs(subjects):
+        markup.row(*i)
+    sent = bot.send_message(message.chat.id, 'choose subject:', reply_markup = markup)
+    bot.register_next_step_handler(sent, func)
 
 # сделать разные списки доступных команд для админов и неадминов.
 # на каждую кнопку по функции.
 # следующий декоратор будет решать какую из функций выбирать в зависимости от нажатой кнопки
-
+started = {}
 @bot.message_handler(commands = ["start"])
 def start(message):
+    if started.get(message.chat.id) == 1:
+        return
+    started[message.chat.id] = 1
     markup = types.ReplyKeyboardMarkup()
-    markup.row('timetable', 'duty')
-    markup.row('tomorrow', 'hw on day')
-    markup.row('actual', 'subject')
-    markup.row('/start')
+    markup.row('timetable', 'duty', '/start')
+    markup.row('tomorrow', 'hw on day', 'actual')
+    markup.row('subject', 'info', 'wish')
+    # markup.row('konspekt')
     if admin(message):
         markup.row('admin menu')
-    sent = bot.send_message(message.chat.id, 'main menu:', reply_markup=markup)
+    sent = bot.send_message(message.chat.id, 'главное меню:', reply_markup=markup)
     bot.register_next_step_handler(sent, first)
 
-@trye
+# @trye
 def first(message):
+    del(started[message.chat.id])
     text = message.text
     adm = admin(message)
     if text == 'timetable':
@@ -176,26 +192,43 @@ def first(message):
             hw = get_hw(d)
             if hw == 'Домашнее задание на %s отсутсвует'%(d):
                 continue
-            actual += d + ':\n' + hw
+            actual += hw
         if not(actual):
             send(message, 'Не найдено ни одного домашнего задания на ближайшую неделю')
         else:
             send(message, actual)
         start(message)
     elif text == 'subject':
-        markup = types.ReplyKeyboardMarkup()
-        for i in make_pairs(subjects):
-            markup.row(*i)
-        sent = bot.send_message(message.chat.id, 'choose subject:', reply_markup = markup)
-        bot.register_next_step_handler(sent, subject_menu)
+        subject_choose(message, subject_menu)
     elif text == 'duty':
         duty = open(path_to_hwbot_v2 + '/data/dutytable.txt', 'r')
         table = duty.readlines()
         duty.close()
         send(message, '\n'.join(table))
         start(message)
+    elif text == 'info':
+        infof = open(path_to_hwbot_v2 + '/data/info.txt')
+        info = ''.join(infof.readlines())
+        infof.close()
+        if info == '':
+            info = 'Важная информация отсутствует.'
+        send(message, info)
+        start(message)
+    elif text == 'wish':
+        sent = send(message, 'Введите текст и он будет отправлен создателю данного бота.', return_fun = True)
+        bot.register_next_step_handler(sent, wish)
+    # elif text == 'konspekt':
+    #     for i in [ru_to_en(sub) for sub in subjects]:
+    #         pass
+    #         try:
+    #             konspektf = open(path_to_hwbot_v2 + '/data/%s/kospekt.pdf'%s)
     else:
         start(message)
+
+def wish(message):
+    wish_bot.send_message(config.admin_id_list[0], message.text)
+    send(message, 'Пожелание отправлено.')
+    start(message)
 
 #на или с?
 # Если задано с 1 на 2, то это:
@@ -203,7 +236,7 @@ def first(message):
 # пробегать по папкам указанным в расписании ok
 
 def get_mode():
-    modef = open(path_to_hwbot_v2 + '/app/mode.txt')
+    modef = open(path_to_hwbot_v2 + '/data/mode.txt')
     mode = modef.read()
     modef.close()
     return mode
@@ -251,6 +284,7 @@ def choose_dates(message):
     current_shown_dates[chat_id] = date #Saving the current date in a dict
     markup= create_calendar(now.year,now.month, subject = ' ')
     bot.send_message(message.chat.id, "Please, choose dates", reply_markup=markup)
+    start(message)
 
 
 
@@ -263,6 +297,7 @@ def hw_on_day(message):
     current_shown_dates[chat_id] = date #Saving the current date in a dict
     markup= create_calendar(now.year,now.month)
     bot.send_message(message.chat.id, "Please, choose a date test", reply_markup=markup)
+    start(message)
 
 
 chosen_dates = {}
@@ -289,7 +324,6 @@ def get_day(call):
             hw = [dates_elem + ':\n' + get_hw(dates_elem, sub = ru_to_en(chosen_subjects[chat_id])) for dates_elem in dates if not(get_hw(dates_elem, sub = ru_to_en(chosen_subjects[chat_id])) == 'Домашнее задание на %s отсутсвует'%(dates_elem))]
             send(call.message, '\n'.join(hw))
             del(chosen_dates[chat_id])
-            start(call.message)
         bot.answer_callback_query(call.id, text="")
 
     else:
@@ -312,7 +346,6 @@ def get_day(call):
 
     else:
         pass
-    start(call.message)
 
 @bot.callback_query_handler(func=lambda call: call.data == 'sub-next-month')
 def sub_next_month(call):
@@ -373,9 +406,9 @@ def ignore(call):
 @trye
 def admin_menu(message):
     markup = types.ReplyKeyboardMarkup()
-    markup.row('test', 'kill')
-    markup.row('change_timetable', 'mode')
-    markup.row('/start')
+    markup.row('test', 'kill', 'change_info')
+    markup.row('change_timetable', 'mode', 'add_hw')
+    markup.row('/start', '.', 'rm_hw')
     sent = bot.send_message(message.chat.id, "admin menu test", reply_markup=markup)
     bot.register_next_step_handler(sent, admin_reply)
 
@@ -395,13 +428,53 @@ def admin_reply(message):
         markup.row('vocation')
         sent = bot.send_message(message.chat.id, 'choose mode:')
         bot.register_next_step_handler(sent, change_mode)
+    elif text == 'change_info':
+        sent = send(message, 'Введите новую информацию:', return_fun = True)
+        bot.register_next_step_handler(sent, change_info)
+    elif text == 'add_hw':
+        subject_choose(message, add_hw_step)
     else:
         start(message)
+
+# @trye
+# def add_hw(message):
+#     subject_choose(messageadd_hw_step)
+
+@trye
+def add_hw_step(message):
+    chosen_subjects[message.chat.id] = message.text
+    sent = send(message, 'Введите дз по предмету "%s"'%(message.text), return_fun = True)
+    bot.register_next_step_handler(sent, add_hw_step2)
+
+# @trye
+def add_hw_step2(message):
+    found = False
+    for day in range(7):
+        if ((datetime.datetime.today() + datetime.timedelta(days = day)).weekday() != 6) and (chosen_subjects.get(message.chat.id) in table.get_all()[(datetime.datetime.today() + datetime.timedelta(days = day)).weekday()]):
+            found = True
+            break
+    if not(found):
+        send(message, 'не найдено дня с этим предметом')
+        start(message)
+        return 0
+    day = str_date(datetime.datetime.today() + datetime.timedelta(days = day))
+    print(day)
+    hwf = open(path_to_hwbot_v2 + '/data/hw/%s/%s.txt'%(ru_to_en(chosen_subjects.get(message.chat.id)), day), 'w')
+    hwf.write(message.text)
+    hwf.close()
+    start(message)
+
+@trye
+def change_info(message):
+    infof = open(path_to_hwbot_v2 + '/data/info.txt', 'w')
+    infof.write(message.text)
+    infof.close()
+    start(message)
 
 @trye
 def change_mode(message):
     text = message.text
-    mode = open(path_to_hwbot_v2 + '/app/mode.txt', 'w')
+    mode = open(path_to_hwbot_v2 + '/data/mode.txt', 'w')
     mode.write(text)
     mode.close()
     send(config.admin_id_list[0], 'mode changed to ' + text)
