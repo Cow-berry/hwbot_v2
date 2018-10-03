@@ -23,9 +23,9 @@ for i in range(len(keys)):
 #en_ru -- en => ru
 
 def en_to_ru(name):
-    return en_ru.get(name, 'NAS')
+    return en_ru.get(name, name)
 
 def ru_to_en(name):
-    return ru_en.get(name, 'NAS')
+    return ru_en.get(name, name)
 
 print(sorted(list(ru_en.keys())))

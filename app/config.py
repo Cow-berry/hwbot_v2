@@ -1,5 +1,3 @@
-token = '419895871:AAGLPIDFxKgYReGFLIoSIVXnh_6_j4yqscs'
+token = '419895871:AAG54nWXJmF5n3y6jkdR0j1uGgA4LsOu300'
+wish_token = '600760240:AAH3L3bNXjO9xvDLhL4sQoDDcNed94TzRHQ'
 admin_id_list = [310802215]
-
-user_fun_list = []
-admin_fun_list = user_fun_list + []

@@ -35,7 +35,7 @@ def create_calendar(year,month, subject = None):
     else:
         adding = ''
     row.append(types.InlineKeyboardButton("<",callback_data=adding + "previous-month"))
-    row.append(types.InlineKeyboardButton("main menu",callback_data="main-menu"))
+    row.append(types.InlineKeyboardButton("главное меню",callback_data="main-menu"))
     row.append(types.InlineKeyboardButton(">",callback_data=adding + "next-month"))
     markup.row(*row)
     return markup
