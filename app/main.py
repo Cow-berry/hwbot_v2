@@ -185,6 +185,7 @@ def subject_choose(message, func, subjects_list = []):
 # на каждую кнопку по функции.
 # следующий декоратор будет решать какую из функций выбирать в зависимости от нажатой кнопки
 started = {}
+@trye
 @bot.message_handler(commands = ["start"])
 def start(message):
     if started.get(message.chat.id) == 1:
@@ -200,7 +201,7 @@ def start(message):
     sent = bot.send_message(message.chat.id, 'главное меню:', reply_markup=markup)
     bot.register_next_step_handler(sent, first)
 
-# @trye
+@trye
 def first(message):
     del(started[message.chat.id])
     text = message.text
@@ -215,7 +216,7 @@ def first(message):
             tomorrow = datetime.date.today()
         else:
             tomorrow = datetime.date.today() + datetime.timedelta(days=1)
-        if datetime.date.isoweekday(datetime.date.today()) == 6 :
+        if datetime.date.isoweekday(datetime.date.today()) == 7:
             tomorrow = tomorrow + datetime.timedelta(days=1)
         tomorrow = tomorrow.strftime("%d.%m.%Y")
         get_hw(message, tomorrow)
@@ -681,7 +682,7 @@ def add_hw_step(message):
     sent = send(message, 'Введите дз по предмету "%s"'%(message.text), return_fun = True)
     bot.register_next_step_handler(sent, add_hw_step2)
 
-# @trye
+@trye
 def add_hw_step2(message):
     found = False
     for day in range(1, 8):
