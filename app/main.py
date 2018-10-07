@@ -214,9 +214,11 @@ def first(message):
     elif text == 'д/з на завтра':
         if datetime.datetime.today().hour < 10:
             tomorrow = datetime.date.today()
+            if datetime.date.isoweekday(datetime.date.today()) == 7:
+                tomorrow = tomorrow + datetime.timedelta(days=1)
         else:
             tomorrow = datetime.date.today() + datetime.timedelta(days=1)
-        if datetime.date.isoweekday(datetime.date.today()) == 7:
+        if datetime.date.isoweekday(datetime.date.today()) == 6:
             tomorrow = tomorrow + datetime.timedelta(days=1)
         tomorrow = tomorrow.strftime("%d.%m.%Y")
         get_hw(message, tomorrow)
