@@ -11,6 +11,7 @@ from telebot import types # для крутых клавиатур
 import os                 # исполнение консольных командcommand = [] # commadn to execute/paste. Переменная создана, т.к. между функциями не сделать передачи.
 from telegramcalendar import create_calendar
 from ru_or_en import ru_to_en, en_to_ru
+import copy
 
 quarters_dates = {1: {'begin': '01.09.2018', 'end': '27.10.2018'}, 2: {'begin': '8.11.2018', 'end': '27.12.2018'}, 3: {'begin': '11.01.2019', 'end': '23.03.2019'}, 4: {'begin': '02.04.2019', 'end': '25.05.2018'}}
 
@@ -121,6 +122,21 @@ subjects = ['Алгебра', 'Англ.яз.', 'Биология', 'Геогр�
 chosen_subjects = {}
 
 def get_hw(message, day, sub = False, hwNotFoundMessage = True):
+        mode = get_mode()
+        try:
+            mode = int(mode)
+        except ValueError:
+            try:
+                holyday = open(path_to_hwbot_v2 + '/data/holydays/' + mode[-1] + '.txt', 'r')
+            except FileNotFoundError:
+                send(message, 'Нет файла ' + '/data/holydays/' + mode[-1] + '.txt')
+            else:
+                hw = holydays.readlines()
+                holyday.close()
+                send(message, 'Есть файла ' + '/data/holydays/' + mode[-1] + '.txt')
+                send(message, ''.join(holyday))
+            finally:
+                return 0
         d = day.split('.')        
         day = '%s.%s.%s'%(d[2], d[1], d[0])
         name = day + '.txt'
@@ -145,11 +161,12 @@ def get_hw(message, day, sub = False, hwNotFoundMessage = True):
             return
         res = day + ':\n'
         files = []
-        for subject in hw:
-            for string in hw[subject]:
-                if string.startswith('file '):
-                    files.append('/data/hw/%s/%s'%(ru_to_en(subject), string.split()[1]))
-                    hw[subject].remove(string)
+        hw_iter = copy.deepcopy(hw)
+        for subject in hw_iter:
+            for i in range(len(hw_iter[subject])):
+                if hw_iter[subject][i].startswith('file '):
+                    files.append('/data/hw/%s/%s'%(ru_to_en(subject), hw_iter[subject][i].split()[1]))
+                    hw[subject].remove(hw_iter[subject][i])
         for sub in hw:
             homework = hw[sub]
             res+='<b>%s</b>:\n%s\n'%(en_to_ru(sub), ''.join(homework))
@@ -161,7 +178,6 @@ def get_hw(message, day, sub = False, hwNotFoundMessage = True):
             try:
                 file = open(path_to_hwbot_v2 + file_path, 'rb')
             except FileNotFoundError:
-                pass
                 bot.send_message(config.admin_id_list[0], 'Не могу открыть файл %s' %(path_to_hwbot_v2 + file_path))
             else:
                 if file_path[-3:] == 'jpg':
@@ -201,7 +217,7 @@ def start(message):
     sent = bot.send_message(message.chat.id, 'главное меню:', reply_markup=markup)
     bot.register_next_step_handler(sent, first)
 
-@trye
+# @trye
 def first(message):
     del(started[message.chat.id])
     text = message.text
@@ -212,6 +228,21 @@ def first(message):
     elif adm and text == 'admin menu':
         admin_menu(message)
     elif text == 'д/з на завтра':
+        mode = get_mode()
+        try:
+            mode = int(mode)
+        except ValueError:
+            try:
+                holyday = open(path_to_hwbot_v2 + '/data/holydays/' + mode[-1] + '.txt', 'r')
+            except FileNotFoundError:
+                send(message, 'Нет файла ' + '/data/holydays/' + mode[-1] + '.txt')
+            else:
+                hw = holyday.readlines()
+                holyday.close()
+                send(message, 'Есть файла ' + '/data/holydays/' + mode[-1] + '.txt')
+                send(message, ''.join(hw))
+            finally:
+                start(message)
         if datetime.datetime.today().hour < 10:
             tomorrow = datetime.date.today()
             if datetime.date.isoweekday(datetime.date.today()) == 7:
@@ -226,6 +257,18 @@ def first(message):
     elif text == 'д/з на день':
         hw_on_day(message)
     elif text == 'заданное сейчас д/з':
+        mode = get_mode()
+        try:
+            holyday = open(path_to_hwbot_v2 + '/data/holydays/' + mode[-1] + '.txt', 'r')
+        except FileNotFoundError:
+            send(message, 'Нет файла ' + '/data/holydays/' + mode[-1] + '.txt')
+        else:
+            hw = holyday.readlines()
+            holyday.close()
+            send(message, 'Есть файла ' + '/data/holydays/' + mode[-1] + '.txt')
+            send(message, ''.join(hw))
+        finally:
+            start(message)
         dates = [(datetime.date.today() + datetime.timedelta(days=i)).strftime("%d.%m.%Y") for i in range(1, 8)]
         actual = ''
         for d in dates:
@@ -337,9 +380,9 @@ def give_subject_hw(message):
                 send(message, 'Нет дз на следующие четверти')
                 start(message)
                 return 0
-    dates = date_range(quarters_dates[text]['begin'], quarters_dates[text]['end'])
-    for d in dates:
-        get_hw(message, d, sub = ru_to_en(chosen_subjects[message.chat.id]), hwNotFoundMessage = False)
+            dates = date_range(quarters_dates[text]['begin'], quarters_dates[text]['end'])
+            for d in dates:
+                get_hw(message, d, sub = ru_to_en(chosen_subjects[message.chat.id]), hwNotFoundMessage = False)
     start(message)
 
 @trye
@@ -393,7 +436,7 @@ def get_days(call):
             if (begin-end).days > 0:
                 begin, end = end, begin
             subject = chosen_subjects[chat_id]
-            dates = date_range(str_date(begin), str_date(end))
+            dates = date_range(*['{:02d}.{:02d}.{:04d}'.format(d.day, d.month, d.year) for d in [begin, end]])
             nohw = True
             for dates_elem in dates:
                 # get_hw(call.message, dates_elem, sub = ru_to_en(chosen_subjects[chat_id]), hwNotFoundMessage = False)
@@ -527,7 +570,8 @@ def admin_reply(message):
         markup = types.ReplyKeyboardMarkup()
         markup.row('1', '2')
         markup.row('3', '4')
-        markup.row('vocation')
+        markup.row('vocation1', 'vocation2')
+        markup.row('vocation3', 'vocation4')
         sent = bot.send_message(message.chat.id, 'choose mode:', reply_markup = markup)
         bot.register_next_step_handler(sent, change_mode)
     elif text == 'change_info':
