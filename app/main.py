@@ -13,7 +13,7 @@ from telegramcalendar import create_calendar
 from ru_or_en import ru_to_en, en_to_ru
 import copy
 
-quarters_dates = {1: {'begin': '01.09.2018', 'end': '27.10.2018'}, 2: {'begin': '8.11.2018', 'end': '27.12.2018'}, 3: {'begin': '11.01.2019', 'end': '23.03.2019'}, 4: {'begin': '02.04.2019', 'end': '25.05.2018'}}
+quarters_dates = {1: {'begin': '01.09.2018', 'end': '27.10.2018'}, 2: {'begin': '08.11.2018', 'end': '27.12.2018'}, 3: {'begin': '11.01.2019', 'end': '23.03.2019'}, 4: {'begin': '02.04.2019', 'end': '25.05.2018'}}
 
 weekdays = {'Понедельник': 0, 'Вторник': 1, 'Среда': 2, 'Четверг': 3, 'Пятница': 4, 'Суббота': 5}
 
@@ -122,21 +122,21 @@ subjects = ['Алгебра', 'Англ.яз.', 'Биология', 'Геогр�
 chosen_subjects = {}
 
 def get_hw(message, day, sub = False, hwNotFoundMessage = True):
-        mode = get_mode()
-        try:
-            mode = int(mode)
-        except ValueError:
-            try:
-                holyday = open(path_to_hwbot_v2 + '/data/holydays/' + mode[-1] + '.txt', 'r')
-            except FileNotFoundError:
-                send(message, 'Нет файла ' + '/data/holydays/' + mode[-1] + '.txt')
-            else:
-                hw = holydays.readlines()
-                holyday.close()
-                send(message, 'Есть файла ' + '/data/holydays/' + mode[-1] + '.txt')
-                send(message, ''.join(holyday))
-            finally:
-                return 0
+        #mode = get_mode()
+        #try:
+        #    mode = int(mode)
+        #except ValueError:
+        #    try:
+        #        holyday = open(path_to_hwbot_v2 + '/data/holydays/' + mode[-1] + '.txt', 'r')
+        #    except FileNotFoundError:
+        #        send(message, 'Нет файла ' + '/data/holydays/' + mode[-1] + '.txt')
+        #    else:
+        #        hw = holydays.readlines()
+        #        holyday.close()
+        #        send(message, 'Есть файла ' + '/data/holydays/' + mode[-1] + '.txt')
+        #        send(message, ''.join(holyday))
+        #    finally:
+        #        return 0
         d = day.split('.')        
         day = '%s.%s.%s'%(d[2], d[1], d[0])
         name = day + '.txt'
@@ -157,7 +157,7 @@ def get_hw(message, day, sub = False, hwNotFoundMessage = True):
         if hw == {}:
             if not(hwNotFoundMessage):
                 return 0
-            send(message,'Домашнее задание на %s отсутсвует'%(day))
+            send(message,'Домашнее задание на %s отсутствует'%(day))
             return
         res = day + ':\n'
         files = []
@@ -180,7 +180,7 @@ def get_hw(message, day, sub = False, hwNotFoundMessage = True):
             except FileNotFoundError:
                 bot.send_message(config.admin_id_list[0], 'Не могу открыть файл %s' %(path_to_hwbot_v2 + file_path))
             else:
-                if file_path[-3:] == 'jpg':
+                if file_path[-3:] in ['jpg', 'png']:
                     bot.send_photo(message.chat.id, file)
                 else:
                     bot.send_document(message.chat.id, file)
@@ -210,10 +210,11 @@ def start(message):
     markup = types.ReplyKeyboardMarkup()
     markup.row('расписание', 'список дежурных', '/start')
     markup.row('д/з на завтра', 'д/з на день', 'заданное сейчас д/з')
-    markup.row('д/з по предмету', 'инфо', 'оставить пожелание')
-    markup.row('конспект', 'список учителей', '.')
+    markup.row('д/з по предмету', 'д/з на сегодня', 'оставить пожелание')
+    markup.row('конспект', 'список учителей', 'инфо')
     if admin(message):
         markup.row('admin menu')
+    markup.row('.')
     sent = bot.send_message(message.chat.id, 'главное меню:', reply_markup=markup)
     bot.register_next_step_handler(sent, first)
 
@@ -259,20 +260,25 @@ def first(message):
     elif text == 'заданное сейчас д/з':
         mode = get_mode()
         try:
-            holyday = open(path_to_hwbot_v2 + '/data/holydays/' + mode[-1] + '.txt', 'r')
-        except FileNotFoundError:
-            send(message, 'Нет файла ' + '/data/holydays/' + mode[-1] + '.txt')
+            mode = int(mode)
+        except ValueError:
+            try:
+                holyday = open(path_to_hwbot_v2 + '/data/holydays/' + mode[-1] + '.txt', 'r')
+            except FileNotFoundError:
+                send(message.chat.id, 'нет файла' + mode)   
+            else:
+                hw = holyday.readlines()
+                holyday.close()
+                send(message, 'Есть файла ' + '/data/holydays/' + mode[-1] + '.txt')
+                send(message, ''.join(hw))
         else:
-            hw = holyday.readlines()
-            holyday.close()
-            send(message, 'Есть файла ' + '/data/holydays/' + mode[-1] + '.txt')
-            send(message, ''.join(hw))
+            dates = [(datetime.date.today() + datetime.timedelta(days=i)).strftime("%d.%m.%Y") for i in range(0, 8)]
+            actual = ''
+            for d in dates:
+                get_hw(message, d, hwNotFoundMessage = False)
         finally:
-            start(message)
-        dates = [(datetime.date.today() + datetime.timedelta(days=i)).strftime("%d.%m.%Y") for i in range(1, 8)]
-        actual = ''
-        for d in dates:
-            get_hw(message, d, hwNotFoundMessage = False)
+            start(message)        
+         
 
         start(message)
     elif text == 'д/з по предмету':
@@ -315,6 +321,16 @@ def first(message):
         teachers = teachersf.readlines()
         teachersf.close()
         send(message, ''.join(teachers))
+        start(message)
+    elif text == 'д/з на сегодня':
+        today = datetime.date.today()
+        if today.isoweekday() == 7:
+            send(message, 'Ты что, сегодня же воскресенье')
+        else:
+            get_hw(message, today.strftime("%d.%m.%Y"))
+        start(message)
+    elif text == '.':
+        send(message, 'coub.com/view/tr2c7')
         start(message)
     else:
         start(message)
@@ -373,16 +389,16 @@ def give_subject_hw(message):
         try:
             mode = int(mode)
         except ValueError:
-            pass
+            sub = text - int(mode[-1])
         else:
             sub = text - mode
-            if sub>0:
-                send(message, 'Нет дз на следующие четверти')
-                start(message)
-                return 0
-            dates = date_range(quarters_dates[text]['begin'], quarters_dates[text]['end'])
-            for d in dates:
-                get_hw(message, d, sub = ru_to_en(chosen_subjects[message.chat.id]), hwNotFoundMessage = False)
+        if sub>0:
+            send(message, 'Нет дз на следующие четверти')
+            start(message)
+            return 0
+        dates = date_range(quarters_dates[text]['begin'], quarters_dates[text]['end'])
+        for d in dates:
+            get_hw(message, d, sub = ru_to_en(chosen_subjects[message.chat.id]), hwNotFoundMessage = False)
     start(message)
 
 @trye
